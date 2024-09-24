@@ -1,77 +1,71 @@
-import './css/styles.css';
-import { Notify } from 'notiflix/build/notiflix-notify-aio';
 import debounce from 'lodash.debounce';
-import { fetchCountries } from '.fetchCountries';
+import Notiflix from 'notiflix';
+import { fetchCountries } from './fetchCountries';
 
+const input = document.querySelector('#search-box');
+const countryList = document.querySelector('.country-list');
+const countryInfo = document.querySelector('.country-info');
 const DEBOUNCE_DELAY = 300;
 
-const refs = {
-    searchEl : document.querySelector('#search-box'),
-    countryInfo : document.querySelector('.country-info'),
-    countryList : document.querySelector('.country-list'),
-};
+function clearOutput() {
+    countryList.innerHTML = '';
+    countryInfo.innerHTML = '';
+}
 
+function renderCountryList(countries) {
+    const markup = countries
+        .map(
+            (country) => `<li>
+                <img src="${country.flags.svg}" alt="Flag of ${country.name.official}" width="50">
+                <span>${country.name.official}</span>
+            </li>`
+        )
+        .join('');
+    countryList.innerHTML = markup;
+}
 
-const clearMarkup = ref => (ref.innerHTML = '');
+function renderCountryInfo(country) {
+    const languages = Object.values(country.languages).join(', ');
+    const markup = `
+        <img src="${country.flags.svg}" alt="Flag of ${country.name.official}" width="100">
+        <h2>${country.name.official}</h2>
+        <p><b>Capital:</b> ${country.capital}</p>
+        <p><b>Population:</b> ${country.population}</p>
+        <p><b>Languages:</b> ${languages}</p>
+    `;
+    countryInfo.innerHTML = markup;
+}
 
-const inputHandler = e => {
-    const textInput = e.target.value.trim();
-
-    if (!textInput) {
-        clearMarkup(refs.countryList);
-        clearMarkup(refs.countryInfo);
+function handleCountriesResponse(countries) {
+    if (countries.length > 10) {
+        Notiflix.Notify.info('Too many matches found. Please enter a more specific name.');
         return;
     }
 
-    fetchCountries(textInput)
-    .then(data => {
-        console.log(data);
-        if (data.lenght > 10) {
-            Notify.info(
-                'Too many matches found. Please enter a more specific name'
-            );
-            return;
-        }
-        renderMarkup(data);
-    })
-
-    .catch(err => {
-        clearMarkup(refs.countryList);
-        clearMarkup(refs.countryInfo);
-        Notify.failure('oops..., there is no country with that name');
-    });
-};
-
-const renderMarkup = data => {
-    if (data.lenght === 1) {
-        clearMarkup(refs.countryList);
-        const markupInfo = createInfoMarkup(data);
-        refs.countryInfo.innerHTML = markupInfo;
-    } else {
-        clearMarkup(refs.countryInfo);
-        const markupList = createListMarkup(data);
-        refs.countryList.innerHTML = markupList;
+    if (countries.length > 1 && countries.length <= 10) {
+        renderCountryList(countries);
+    } else if (countries.length === 1) {
+        renderCountryInfo(countries[0]);
     }
-};
+}
 
-const createListMarkup = data => {
-    return data
-        .map(
-            ({ name, flags }) =>
-                `<li><img src="${flags.png}" alt="${name.official}"</li>`
-        )
-        .join('');
-};
+function onSearch(event) {
+    const query = event.target.value.trim();
+    
+    if (query === '') {
+        clearOutput();
+        return;
+    }
+    
+    fetchCountries(query)
+        .then(handleCountriesResponse)
+        .catch((error) => {
+            if (error.message === '404') {
+                Notiflix.Notify.failure('Oops, there is no country with that name');
+            } else {
+                console.error(error);
+            }
+        });
+}
 
-const createInfoMarkup = data => {
-    return data.map(
-        ({ name, capital, population, flags, languages }) => 
-            `<img src="${flags.png}" alt="${name.official}" width="200" height="100>
-            <h1>${name.official}</h1>
-            <p>Capital: ${capital}</p>
-            <p>Population: ${population}</p>
-            <p>Languages: ${Object.values(languages)}</p>`
-    );
-};
-
-refs.searchEl.addEventListener('input', debounce(inputHandler, DEBOUNCE_DELAY));
+input.addEventListener('input', debounce(onSearch, DEBOUNCE_DELAY));
